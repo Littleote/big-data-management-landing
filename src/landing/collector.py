@@ -13,14 +13,14 @@ class DataCollector:
         elif isinstance(config, dict):
             self.config = config
         elif isinstance(config, str):
-            self.load_config_file(config)
+            self._load_config_file(config)
         else:
             raise ValueError(
                 f"Configuration must be a dictionary, file path or empty not {type(config).__name__}"
             )
-        self.validate_config()
+        self._validate_config()
 
-    def load_config_file(self, config_file: str):
+    def _load_config_file(self, config_file: str):
         with open(config_file, mode="r") as handler:
             self.config = json.load(handler)
 
@@ -30,15 +30,15 @@ class DataCollector:
     def versions(self) -> list[str]:
         raise NotImplementedError()
 
-    def validate_config(self):
+    def _validate_config(self):
         raise NotImplementedError()
 
 
 class FileCollector(DataCollector):
     VERSION_REGEX = r"^.*?(\d(?:.*\d)?|\D*)\D*\.[^\.]+$"
-    # ^(\d{4}_\d{2}_\d{2})_idealista\.(?:json|JSON)$
-    # ^(.*)_extended\.(?:csv|CSV)$
-    # ^(\d{4})_Distribucio_territorial_renda_familiar\.(?:csv|CSV)$
+    # Idealista:    ^(\d{4}_\d{2}_\d{2})_idealista\.(?:json|JSON)$
+    # Wikidata:     ^(.*)_extended\.(?:csv|CSV)$
+    # Barcelona:    ^(\d{4})_Distribucio_territorial_renda_familiar\.(?:csv|CSV)$
     FILE_REGEX = r"^(.+)\.[^\.]+$"
 
     def __init__(self, *args, **kwargs):
@@ -73,7 +73,7 @@ class FileCollector(DataCollector):
         ]
         return versions
 
-    def validate_config(self):
+    def _validate_config(self):
         assert isinstance(
             self.config, dict
         ), f"Configuration must be a dictionary, not a {type(self.config).__name__}"
