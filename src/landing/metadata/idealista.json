@@ -1,0 +1,8 @@
+{
+    "folders": [
+        "../data/idealista",
+        "data/idealista"
+    ],
+    "type": "FileCollector",
+    "version": "^(\\d{4}_\\d{2}_\\d{2})_idealista\\.(?:json|JSON)$"
+}

@@ -1,7 +1,7 @@
-import shutil
 import json
-import re
 import os
+import re
+import shutil
 
 
 class DataCollector:
@@ -12,24 +12,16 @@ class DataCollector:
             self.config = {}
         elif isinstance(config, dict):
             self.config = config
-        elif isinstance(config, str):
-            self.config = DataCollector._load_config_file(config)
         else:
-            raise ValueError(
-                f"Configuration must be a dictionary, file path or empty not {type(config).__name__}"
-            )
+            self.config = DataCollector._load_config_file(config)
         self._validate_config()
 
     @staticmethod
     def instance(config: dict | str) -> "DataCollector":
         if isinstance(config, dict):
             pass
-        elif isinstance(config, str):
-            config = DataCollector._load_config_file(config)
         else:
-            raise ValueError(
-                f"Configuration must be a dictionary, file path or empty not {type(config).__name__}"
-            )
+            config = DataCollector._load_config_file(config)
         assert "type" in config.keys(), "Instancing configuration must specify 'type'"
         if isinstance(config["type"], type):
             collector = config["type"]

@@ -1,0 +1,8 @@
+{
+    "folders": [
+        "../data/opendatabcn-income",
+        "data/opendatabcn-income"
+    ],
+    "type": "FileCollector",
+    "version": "^(\\d{4})_Distribucio_territorial_renda_familiar\\.(?:csv|CSV)$"
+}

@@ -1,0 +1,8 @@
+{
+    "folders": [
+        "../data/lookup_tables",
+        "data/lookup_tables"
+    ],
+    "type": "FileCollector",
+    "version": "^(.*)_extended\\.(?:csv|CSV)$"
+}
