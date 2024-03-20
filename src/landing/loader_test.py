@@ -29,7 +29,11 @@ def insert(
         db = client[db_name]
         coll = db[coll_name]
         coll.delete_many({})
-        coll.insert_many(payload)
+        if len(payload) > 0:
+            coll.insert_many(payload)
+        else:
+            ...
+            # TODO: log warning of empty payload
 
 
 LOADERS = {

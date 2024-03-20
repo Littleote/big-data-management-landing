@@ -1,7 +1,10 @@
+import requests
+import shutil
 import json
 import os
 import re
-import shutil
+
+from pathlib import Path
 
 
 class DataCollector:
@@ -42,7 +45,7 @@ class DataCollector:
             ), "Configuration JSON file must be a dictionary"
             return config
 
-    def retrive(self, version: str, dest: str) -> str:
+    def retrive(self, version: str, dest: Path) -> str:
         raise NotImplementedError()
 
     def versions(self) -> list[str]:
@@ -62,7 +65,7 @@ class FileCollector(DataCollector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: str) -> str:
+    def retrive(self, version: str, dest: Path) -> str:
         folders = self.config["folders"]
         folders = folders if isinstance(folders, list) else [folders]
         matches = [
@@ -107,3 +110,37 @@ class FileCollector(DataCollector):
             self.config["file"] = self.config.get("version", cls.FILE_REGEX)
         if "version" not in self.config.keys():
             self.config["version"] = cls.VERSION_REGEX
+
+
+class URLCollector(DataCollector):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def retrive(self, version: str, dest: Path) -> str:
+        r = requests.get(
+            self.config["URL"].format(version=version),
+            stream=True,
+            **self.config["request"],
+        )
+        file = "file"
+        destination = os.path.join(dest, file)
+        chunk_size = 65536
+        with open(destination, mode="wb", buffering=chunk_size) as handler:
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                handler.write(chunk)
+        return dest
+
+    def versions(self) -> list[str]:
+        raise NotImplementedError()
+
+    def _validate_config(self):
+        # Correct or error on missing attributes
+        # cls = URLCollector
+        assert (
+            "URL" in self.config.keys()
+        ), "URLCollector configuration must specify 'URL'"
+        if "request" not in self.config.keys():
+            self.config["request"] = {}
+        assert isinstance(
+            self.config["request"], dict
+        ), "Request information ('request') must be a dictionary"

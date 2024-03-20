@@ -9,15 +9,23 @@ from landing.collector import DataCollector as Collector
 from landing.loader_test import load
 
 
+def landing(collector: Collector, dest: Path, source: Path, version: str):
+    file = collector.retrive(version, dest)
+    load(source.stem, version, file)
+    # TODO: ADD Data loader step
+
+
 def retrive(args: argparse.Namespace):
     metadata = Path("landing/metadata")
     sources = metadata.glob("**/*.json")
     if args.source is None:
+        # Ask user for the metadata source
         print("Select a source:")
         sources = [source.relative_to(metadata) for source in sources]
         source = sources[select_from(sources)]
         source = Path(metadata, source)
     else:
+        # Validate the source specified in the arguments
         source = args.source
         if Path(source).suffix.lower() != ".json":
             source += ".json"
@@ -27,21 +35,26 @@ def retrive(args: argparse.Namespace):
             raise ValueError(
                 f"Invalid source file ({source.relative_to(metadata)}). Files are: {', '.join(valid)}"
             )
+
+    # Instantiate landing elements
     collector = Collector.instance(source)
     versions = collector.versions()
-    latest = max(versions)
-    use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
-    if use_latest[:1].lower() == "n":
-        print("Select an available version of the source:")
-        version = versions[select_from(versions)]
-    else:
-        version = latest
 
     with tempfile.TemporaryDirectory() as directory:
-        file = collector.retrive(version, directory)
-
-        load(source.stem, version, file)
-        # TODO: ADD Data loader step
+        if args.all:
+            # Retrive all available versions
+            for version in versions:
+                landing(collector, directory, source, version)
+        else:
+            # Retrive user selected version
+            latest = max(versions)
+            use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
+            if use_latest[:1].lower() == "n":
+                print("Select an available version of the source:")
+                version = versions[select_from(versions)]
+            else:
+                version = latest
+            landing(collector, directory, source, version)
 
 
 def select_from(
@@ -50,6 +63,11 @@ def select_from(
     *,
     on_bad_input: Callable | str | None = "raise",
 ) -> int | None:
+    """
+    Enumerate all options and return the index specified by the user
+
+    If it failes to parse the user input, use `on_bad_input` to determine what to do
+    """
     for i, option in enumerate(options):
         print(f"{i + 1}.- {str(option)}")
     try:
@@ -72,6 +90,11 @@ def main():
     retrive_cmd.add_argument(
         "--source",
         help="Specify the dataset source to retrive from the ones present in the metadata",
+    )
+    retrive_cmd.add_argument(
+        "--all",
+        action="store_true",
+        help="Load all available versions of the source",
     )
     retrive_cmd.set_defaults(func=retrive)
 
