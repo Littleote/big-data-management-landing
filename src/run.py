@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from landing.collector import DataCollector as Collector
+from landing.loader_test import load
 
 
 def retrive(args: argparse.Namespace):
@@ -30,16 +31,16 @@ def retrive(args: argparse.Namespace):
     versions = collector.versions()
     latest = max(versions)
     use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
-    if use_latest[:-1].lower() == "n":
+    if use_latest[:1].lower() == "n":
         print("Select an available version of the source:")
         version = versions[select_from(versions)]
     else:
         version = latest
 
     with tempfile.TemporaryDirectory() as directory:
-        collector.retrive(version, directory)
+        file = collector.retrive(version, directory)
 
-        [print(file) for file in Path(directory).iterdir()]
+        load(source.stem, version, file)
         # TODO: ADD Data loader step
 
 

@@ -42,7 +42,7 @@ class DataCollector:
             ), "Configuration JSON file must be a dictionary"
             return config
 
-    def retrive(self, version: str, dest: str):
+    def retrive(self, version: str, dest: str) -> str:
         raise NotImplementedError()
 
     def versions(self) -> list[str]:
@@ -62,7 +62,7 @@ class FileCollector(DataCollector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: str):
+    def retrive(self, version: str, dest: str) -> str:
         folders = self.config["folders"]
         folders = folders if isinstance(folders, list) else [folders]
         matches = [
@@ -80,10 +80,10 @@ class FileCollector(DataCollector):
             len(matches) <= 1
         ), f"Expected exactly one match for version '{version}' but matched with {', '.join(matches)}"
         (folder, match) = matches[0]
-        shutil.copyfile(
-            os.path.join(folder, match),
-            os.path.join(dest, match),
-        )
+        source = os.path.join(dest, match)
+        destination = os.path.join(dest, match)
+        shutil.copyfile(source, destination)
+        return destination
 
     def versions(self) -> list[str]:
         folders = self.config["folders"]
