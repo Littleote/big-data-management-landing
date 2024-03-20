@@ -80,7 +80,7 @@ class FileCollector(DataCollector):
             len(matches) <= 1
         ), f"Expected exactly one match for version '{version}' but matched with {', '.join(matches)}"
         (folder, match) = matches[0]
-        source = os.path.join(dest, match)
+        source = os.path.join(folder, match)
         destination = os.path.join(dest, match)
         shutil.copyfile(source, destination)
         return destination
