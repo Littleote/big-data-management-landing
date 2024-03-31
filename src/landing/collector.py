@@ -1,10 +1,9 @@
 import requests
-import shutil
 import json
 import os
 import re
 
-from pathlib import Path
+from hdfs import Client
 
 
 class DataCollector:
@@ -45,7 +44,7 @@ class DataCollector:
             ), "Configuration JSON file must be a dictionary"
             return config
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
         raise NotImplementedError()
 
     def versions(self) -> list[str]:
@@ -65,7 +64,7 @@ class FileCollector(DataCollector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
         folders = self.config["folders"]
         folders = folders if isinstance(folders, list) else [folders]
         matches = [
@@ -84,9 +83,9 @@ class FileCollector(DataCollector):
         ), f"Expected exactly one match for version '{version}' but matched with {', '.join(matches)}"
         (folder, match) = matches[0]
         source = os.path.join(folder, match)
-        destination = os.path.join(dest, match)
-        shutil.copyfile(source, destination)
-        return destination
+        dest = os.path.join("", match)
+        client.upload(dest, source)
+        return dest
 
     def versions(self) -> list[str]:
         folders = self.config["folders"]
@@ -116,18 +115,17 @@ class URLCollector(DataCollector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
         r = requests.get(
             self.config["URL"].format(version=version),
             stream=True,
             **self.config["request"],
         )
-        file = "file"
-        destination = os.path.join(dest, file)
+        dest = "file"
         chunk_size = 65536
-        with open(destination, mode="wb", buffering=chunk_size) as handler:
+        with client.write(dest, chunk_size=chunk_size) as writer:
             for chunk in r.iter_content(chunk_size=chunk_size):
-                handler.write(chunk)
+                writer.write(chunk)
         return dest
 
     def versions(self) -> list[str]:

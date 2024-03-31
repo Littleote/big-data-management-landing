@@ -4,15 +4,18 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Callable
+from hdfs import InsecureClient, Client
 
 from landing.collector import DataCollector as Collector
 from landing.loader_test import load
 
 
-def landing(collector: Collector, dest: Path, source: Path, version: str):
-    file = collector.retrive(version, dest)
+def landing(collector: Collector, client: Client, source: Path, version: str):
+    file = collector.retrive(version, client)
+
     load(source.stem, version, file)
     # TODO: ADD Data loader step
+    client.delete(file)
 
 
 def retrive(args: argparse.Namespace):
@@ -38,23 +41,23 @@ def retrive(args: argparse.Namespace):
 
     # Instantiate landing elements
     collector = Collector.instance(source)
+    client = InsecureClient("http://host:port", user="user")
     versions = collector.versions()
 
-    with tempfile.TemporaryDirectory() as directory:
-        if args.all:
-            # Retrive all available versions
-            for version in versions:
-                landing(collector, directory, source, version)
+    if args.all:
+        # Retrive all available versions
+        for version in versions:
+            landing(collector, client, source, version)
+    else:
+        # Retrive user selected version
+        latest = max(versions)
+        use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
+        if use_latest[:1].lower() == "n":
+            print("Select an available version of the source:")
+            version = versions[select_from(versions)]
         else:
-            # Retrive user selected version
-            latest = max(versions)
-            use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
-            if use_latest[:1].lower() == "n":
-                print("Select an available version of the source:")
-                version = versions[select_from(versions)]
-            else:
-                version = latest
-            landing(collector, directory, source, version)
+            version = latest
+        landing(collector, client, source, version)
 
 
 def select_from(
