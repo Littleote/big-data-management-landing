@@ -41,7 +41,7 @@ def retrive(args: argparse.Namespace):
 
     # Instantiate landing elements
     collector = Collector.instance(source)
-    client = InsecureClient("http://host:port", user="user")
+    client = InsecureClient(f"http://{args.host}:9870", user="bdm")
     versions = collector.versions()
 
     if args.all:
@@ -90,6 +90,12 @@ def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="cmd")
     retrive_cmd = subparsers.add_parser("retrive")
+    retrive_cmd.add_argument(
+        "--host",
+        type=str,
+        required=True,
+        help="The IP of the HDFS server to connect to",
+    )
     retrive_cmd.add_argument(
         "--source",
         help="Specify the dataset source to retrive from the ones present in the metadata",
