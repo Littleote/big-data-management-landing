@@ -1,21 +1,30 @@
 import argparse
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import Callable
-from hdfs import InsecureClient, Client
 
+from hdfs import Client, InsecureClient
 from landing.collector import DataCollector as Collector
-#from landing.loader_test import load
 from landing.loader import mongoimport
 
 
 def landing(collector: Collector, client: Client, source: Path, version: str):
-    file = collector.retrive(version, client)
-
-    mongoimport(client, file)
-    # TODO: ADD Data loader step
+    try:
+        file = collector.retrive(version, client)
+        records = mongoimport(
+            client,
+            file,
+            db_name="bdm",
+            coll_name=f"{source.stem}/{version}",
+        )
+        print(
+            f"Loaded {records} records from source/version: '{source.stem}/{version}'"
+        )
+    except Exception as err:
+        print(f"Failed to load from source/version: '{source.stem}/{version}'")
+        print("Failed due to the following error:")
+        print(err)
     client.delete(file)
 
 

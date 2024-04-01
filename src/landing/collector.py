@@ -84,7 +84,7 @@ class FileCollector(DataCollector):
         (folder, match) = matches[0]
         source = os.path.join(folder, match)
         dest = os.path.join("", match)
-        client.upload(dest, source)
+        client.upload(dest, source, overwrite=True)
         return dest
 
     def versions(self) -> list[str]:
