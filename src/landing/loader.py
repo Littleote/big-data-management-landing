@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 import pandas as pd
 
-def mongoimport(client_hdfs, hdfs_file_path, db_name, coll_name, db_url='localhost', db_port=27017):
+def mongoimport(client_hdfs, hdfs_file_path, db_name = "Local_DB", coll_name = "BDM_project", db_url='localhost', db_port=27017):
     """ Imports a csv file at path csv_name to a mongo colection
     returns: count of the documents in the new collection
     """
@@ -15,6 +15,6 @@ def mongoimport(client_hdfs, hdfs_file_path, db_name, coll_name, db_url='localho
     coll.delete_many({})
     coll.insert_many(df.to_dict('records'))
 
-    mongo_client.close() #close connection
-
     return coll.count_documents({})
+
+    mongo_client.close() #close connection

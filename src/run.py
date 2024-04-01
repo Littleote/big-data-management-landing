@@ -7,13 +7,14 @@ from typing import Callable
 from hdfs import InsecureClient, Client
 
 from landing.collector import DataCollector as Collector
-from landing.loader_test import load
+#from landing.loader_test import load
+from landing.loader import mongoimport
 
 
 def landing(collector: Collector, client: Client, source: Path, version: str):
     file = collector.retrive(version, client)
 
-    load(source.stem, version, file)
+    mongoimport(client, file)
     # TODO: ADD Data loader step
     client.delete(file)
 
