@@ -10,6 +10,7 @@ from landing.loader import mongoimport
 
 
 def landing(collector: Collector, client: Client, source: Path, version: str):
+    file: str | None = None
     try:
         file = collector.retrive(version, client)
         records = mongoimport(
@@ -25,7 +26,8 @@ def landing(collector: Collector, client: Client, source: Path, version: str):
         print(f"Failed to load from source/version: '{source.stem}/{version}'")
         print("Failed due to the following error:")
         print(err)
-    client.delete(file)
+    if file is not None:
+        client.delete(file)
 
 
 def retrive(args: argparse.Namespace):
@@ -38,16 +40,23 @@ def retrive(args: argparse.Namespace):
         source = sources[select_from(sources)]
         source = Path(metadata, source)
     else:
-        # Validate the source specified in the arguments
         source = args.source
-        if Path(source).suffix.lower() != ".json":
-            source += ".json"
-        source = Path(metadata, source)
-        if not source.is_file():
-            valid = [str(source.relative_to(metadata)) for source in sources]
-            raise ValueError(
-                f"Invalid source file ({source.relative_to(metadata)}). Files are: {', '.join(valid)}"
-            )
+        if source == "*":
+            # Run for all source files
+            for source in sources:
+                args.source = source.relative_to(metadata)
+                retrive(args)
+            return
+        else:
+            # Validate the source specified in the arguments
+            if Path(source).suffix.lower() != ".json":
+                source += ".json"
+            source = Path(metadata, source)
+            if not source.is_file():
+                valid = [str(source.relative_to(metadata)) for source in sources]
+                raise ValueError(
+                    f"Invalid source file ({source.relative_to(metadata)}). Files are: {', '.join(valid)}"
+                )
 
     # Instantiate landing elements
     collector = Collector.instance(source)
@@ -61,12 +70,16 @@ def retrive(args: argparse.Namespace):
     else:
         # Retrive user selected version
         latest = max(versions)
-        use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
-        if use_latest[:1].lower() == "n":
+        if args.latest:
+            use_latest = True
+        else:
+            user = input(f"Use latest version? ({latest}) [Y]/N ")
+            use_latest = user[:1].lower() != "n"
+        if use_latest:
+            version = latest
+        else:
             print("Select an available version of the source:")
             version = versions[select_from(versions)]
-        else:
-            version = latest
         landing(collector, client, source, version)
 
 
@@ -108,12 +121,19 @@ def main():
     )
     retrive_cmd.add_argument(
         "--source",
-        help="Specify the dataset source to retrive from the ones present in the metadata",
+        help="Specify the dataset source to retrive from the ones present in the metadata. \
+            Use '*' to retrive from all sources",
     )
-    retrive_cmd.add_argument(
+    which_version = retrive_cmd.add_mutually_exclusive_group()
+    which_version.add_argument(
         "--all",
         action="store_true",
         help="Load all available versions of the source",
+    )
+    which_version.add_argument(
+        "--latest",
+        action="store_true",
+        help="Load latest versions of the source",
     )
     retrive_cmd.set_defaults(func=retrive)
 
