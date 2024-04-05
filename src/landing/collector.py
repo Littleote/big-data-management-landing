@@ -114,9 +114,9 @@ class FileCollector(DataCollector):
 
 
 class URLCollector(DataCollector):
-    VERSION_REGEX = r"https?:\/\/(?:www\.)?(?:[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b)*(?:\/([\d\w\.-]*))+(?:[\?])*(?:[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+)*"
-    # Barcelona:    (?i)https://opendata-ajuntament\.barcelona\.cat/data/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+/download/(\d+)_distribucio_territorial_renda_familiar\.csv
-    LINK_REGEX = VERSION_REGEX
+    # Income:   (?i)(?P<link>https://opendata-ajuntament\.barcelona\.cat/data/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+/download/(?P<version>\d+)_distribucio_territorial_renda_familiar\.csv)
+    # Padró:    (?si)title="(?P<version>\d+)_pad_cdo_b_barri-des\.csv".+?(?P<link>https://opendata-ajuntament\.barcelona\.cat/data/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+/download)
+    INFO_REGEX = r"(?P<link>https?:\/\/(?:www\.)?(?:[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b)*(?:\/(?P<version>[\d\w\.-]*))+(?:[\?])*(?:[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+)*)"
 
     def __init__(self, *args, **kwargs):
         self.links: dict[str, str] = {}
@@ -155,9 +155,9 @@ class URLCollector(DataCollector):
     def get_scraping_URL(self):
         scraping = self.config["scraping"]
         r = requests.get(scraping["web"])
-        for link in re.finditer(scraping["link"], r.text):
-            link = link.group(0)
-            version = re.match(scraping["version"], link).group(1)
+        for matchobj in re.finditer(scraping["info"], r.text):
+            link = matchobj.group("link")
+            version = matchobj.group("version")
             self.links[version] = link
 
     def _validate_config(self):
@@ -196,9 +196,9 @@ class URLCollector(DataCollector):
                 urllib.parse.urlparse(scraping["web"])
             except AttributeError as err:
                 raise "Invalid URL in 'web' parameter for 'scraping' option" from err
-            if "link" not in scraping.keys():
-                scraping["link"] = scraping.get("version", cls.LINK_REGEX)
-            if "version" not in scraping.keys():
-                scraping["version"] = cls.VERSION_REGEX
+            if "info" not in scraping.keys():
+                scraping["info"] = scraping.get("info", cls.INFO_REGEX)
+            assert "(?P<link>" in scraping["info"]
+            assert "(?P<version>" in scraping["info"]
         else:
             assert False, "No method specified to obtain the datasets URL"

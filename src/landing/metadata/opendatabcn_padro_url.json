@@ -1,0 +1,7 @@
+{
+    "scraping": {
+        "info": "(?si)title=\"(?P<version>\\d+)_pad_cdo_b_barri-des\\.csv\".+?(?P<link>https://opendata-ajuntament\\.barcelona\\.cat/data/[-A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=]+/download)",
+        "web": "https://opendata-ajuntament.barcelona.cat/data/en/dataset/pad_cdo_b_barri-des"
+    },
+    "type": "URLCollector"
+}

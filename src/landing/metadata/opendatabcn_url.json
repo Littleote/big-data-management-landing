@@ -1,7 +1,0 @@
-{
-    "scraping": {
-        "version": "(?i)https://opendata-ajuntament\\.barcelona\\.cat/data/[-A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=]+/download/(\\d+)_distribucio_territorial_renda_familiar\\.csv",
-        "web": "https://opendata-ajuntament.barcelona.cat/data/es/dataset/est-renda-familiar"
-    },
-    "type": "URLCollector"
-}
