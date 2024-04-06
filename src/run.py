@@ -4,40 +4,16 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-import paramiko
-
 from hdfs import Client, InsecureClient
 from landing.collector import DataCollector as Collector
 from landing.loader import mongoimport
 
-def create_ssh_connection(host, username, password):
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+from service import Service
 
-    try:
-        ssh.connect(host, username=username, password=password)
-        print("SSH connection established successfully.")
 
-        # Execute the command to start HDFS
-        stdin, stdout, stderr = ssh.exec_command('/home/bdm/BDM_Software/hadoop/sbin/start-dfs.sh')
-
-        # Read and print output
-        print("Output:")
-        for line in stdout:
-            print(line.strip())
-
-        # Check for any errors
-        if stderr.channel.recv_exit_status() != 0:
-            print("Error:", stderr.read().decode())
-
-    except paramiko.AuthenticationException:
-        print("Authentication failed, please verify your credentials")
-    except paramiko.SSHException as ssh_ex:
-        print("Unable to establish SSH connection:", ssh_ex)
-    finally:
-        return ssh
-
-def landing(collector: Collector, client: Client, source: Path, version: str):
+def landing(
+    collector: Collector, client: Client, host: str, source: Path, version: str
+):
     file: str | None = None
     try:
         file = collector.retrive(version, client)
@@ -46,6 +22,7 @@ def landing(collector: Collector, client: Client, source: Path, version: str):
             file,
             db_name="bdm",
             coll_name=f"{source.stem}/{version}",
+            db_url=host,
         )
         print(
             f"Loaded {records} records from source/version: '{source.stem}/{version}'"
@@ -94,7 +71,7 @@ def retrive(args: argparse.Namespace):
     if args.all:
         # Retrive all available versions
         for version in versions:
-            landing(collector, client, source, version)
+            landing(collector, client, args.host, source, version)
     else:
         # Retrive user selected version
         latest = max(versions)
@@ -108,7 +85,7 @@ def retrive(args: argparse.Namespace):
         else:
             print("Select an available version of the source:")
             version = versions[select_from(versions)]
-        landing(collector, client, source, version)
+        landing(collector, client, args.host, source, version)
 
 
 def select_from(
@@ -138,16 +115,23 @@ def select_from(
 
 
 def main():
-    ssh = create_ssh_connection("10.4.41.55", "bdm", "bdm")
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="cmd")
-    retrive_cmd = subparsers.add_parser("retrive")
-    retrive_cmd.add_argument(
+    parser.add_argument(
         "--host",
         type=str,
         required=True,
-        help="The IP of the HDFS server to connect to",
+        help="The IP of the server to connect to",
     )
+    parser.add_argument(
+        "--start_service",
+        type=str,
+        metavar=["USERNAME", "PASSWORD"],
+        nargs=2,
+        help="Credentials to start up the system",
+    )
+
+    subparsers = parser.add_subparsers(dest="cmd")
+    retrive_cmd = subparsers.add_parser("retrive")
     retrive_cmd.add_argument(
         "--source",
         help="Specify the dataset source to retrive from the ones present in the metadata. \
@@ -171,10 +155,8 @@ def main():
         parser.print_help()
     else:
         os.chdir(Path(__file__).absolute().parent)
-        args.func(args)
-
-    ssh.exec_command('/home/bdm/BDM_Software/hadoop/sbin/stop-dfs.sh')
-    ssh.close()
+        with Service(args.host, *args.start_service):
+            args.func(args)
 
 
 if __name__ == "__main__":
