@@ -37,9 +37,6 @@ def create_ssh_connection(host, username, password):
     finally:
         return ssh
 
-# Call the function to create SSH connection and start HDFS
-
-
 def landing(collector: Collector, client: Client, source: Path, version: str):
     file: str | None = None
     try:
