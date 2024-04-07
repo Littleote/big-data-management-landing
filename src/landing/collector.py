@@ -138,7 +138,7 @@ class URLCollector(DataCollector):
         ][0]
         dest = f"file.{extension}"
         chunk_size = 65536
-        with client.write(dest, buffersize=chunk_size) as writer:
+        with client.write(dest, buffersize=chunk_size, overwrite=True) as writer:
             for chunk in r.iter_content(chunk_size=chunk_size):
                 writer.write(chunk)
         return dest
