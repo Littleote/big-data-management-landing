@@ -6,6 +6,8 @@ We tried to simplify the code as much as possible, so that it is easy to underst
 
 This is the entry point to run the whole process, you can run `python src/run.py --help` and `python src/run.py retrive --help` to get the list of arguments for the command line and choose the desired configuration for data ingestion.
 
+As an example, for ingesting data from all sources and all the versions you would run: `python src/run.py --host 10.4.41.55 retrive --source * --all`
+
 ## service.py
 
 To ensure that the process is automated and that the user does not have to do many things manually, we created a functionality which creates an ssh connection to the VM provided by the UPC, starts the HDFS and MongoDB services and it also closes them at the end of execution.
