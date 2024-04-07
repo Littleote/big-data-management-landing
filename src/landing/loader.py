@@ -1,31 +1,40 @@
-from pymongo import MongoClient
+from pathlib import Path
+from typing import Any, Callable
+
 import pandas as pd
-import json
-import os
+from hdfs import Client
+from pymongo import MongoClient
 
-def read_data(file_path):
-    root_ext_pair = os.path.splitext(file_path)
-    if root_ext_pair[1] == '.csv':
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_json(file_path)
-    return df
+READER: dict[str, Callable[[Any], pd.DataFrame]] = {
+    ".csv": pd.read_csv,
+    ".json": pd.read_json,
+}
 
-def mongoimport(file_path, db_name, coll_name, db_url='localhost', db_port=27017):
-    """ Imports a csv file at path csv_name to a mongo colection
+
+def mongoimport(
+    client_hdfs: Client,
+    hdfs_file: str,
+    db_name: str,
+    coll_name: str,
+    db_url: str = "localhost",
+    db_port: int = 27017,
+):
+    """
+    Load a file from HDFS to a MongoDB collection
+
     returns: count of the documents in the new collection
     """
-    client = MongoClient(db_url, db_port)
-    db = client[db_name]
-    coll = db[coll_name]
-    data = read_data(file_path)
-    payload = json.loads(data.to_json(orient='records'))
-    print(payload)
-    coll.delete_many({})
-    coll.insert_many(payload)
-    return coll.count_documents({})
-    client.close() #close connection
+    hdfs_file = Path(hdfs_file)
+    with MongoClient(db_url, db_port) as mongo_client:
+        db = mongo_client[db_name]
+        coll = db[coll_name]
 
-# function that given a file can deal with it (CSV, JSON)
+        with client_hdfs.read(hdfs_file) as reader:
+            df = READER[hdfs_file.suffix.lower()](reader)
 
-mongoimport('../../data/lookup_tables/idealista_extended.csv', 'Local_DB', 'BDM_project')
+        coll.delete_many({})
+        if df.empty:
+            return 0
+        coll.insert_many(df.to_dict("records"))
+
+        return coll.count_documents({})

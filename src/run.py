@@ -1,18 +1,38 @@
 import argparse
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import Callable
 
+from hdfs import Client, InsecureClient
 from landing.collector import DataCollector as Collector
-from landing.loader_test import load
+from landing.loader import mongoimport
+
+from service import Service
 
 
-def landing(collector: Collector, dest: Path, source: Path, version: str):
-    file = collector.retrive(version, dest)
-    load(source.stem, version, file)
-    # TODO: ADD Data loader step
+def landing(
+    collector: Collector, client: Client, host: str, source: Path, version: str
+):
+    file: str | None = None
+    try:
+        file = collector.retrive(version, client)
+        records = mongoimport(
+            client,
+            file,
+            db_name="bdm",
+            coll_name=f"{source.stem}/{version}",
+            db_url=host,
+        )
+        print(
+            f"Loaded {records} records from source/version: '{source.stem}/{version}'"
+        )
+    except Exception as err:
+        print(f"Failed to load from source/version: '{source.stem}/{version}'")
+        print("Failed due to the following error:")
+        print(err)
+    if file is not None:
+        client.delete(file)
 
 
 def retrive(args: argparse.Namespace):
@@ -25,36 +45,47 @@ def retrive(args: argparse.Namespace):
         source = sources[select_from(sources)]
         source = Path(metadata, source)
     else:
-        # Validate the source specified in the arguments
         source = args.source
-        if Path(source).suffix.lower() != ".json":
-            source += ".json"
-        source = Path(metadata, source)
-        if not source.is_file():
-            valid = [str(source.relative_to(metadata)) for source in sources]
-            raise ValueError(
-                f"Invalid source file ({source.relative_to(metadata)}). Files are: {', '.join(valid)}"
-            )
+        if source == "*":
+            # Run for all source files
+            for source in sources:
+                args.source = source.relative_to(metadata)
+                retrive(args)
+            return
+        else:
+            # Validate the source specified in the arguments
+            if Path(source).suffix.lower() != ".json":
+                source += ".json"
+            source = Path(metadata, source)
+            if not source.is_file():
+                valid = [str(source.relative_to(metadata)) for source in sources]
+                raise ValueError(
+                    f"Invalid source file ({source.relative_to(metadata)}). Files are: {', '.join(valid)}"
+                )
 
     # Instantiate landing elements
     collector = Collector.instance(source)
+    client = InsecureClient(f"http://{args.host}:9870", user="bdm")
     versions = collector.versions()
 
-    with tempfile.TemporaryDirectory() as directory:
-        if args.all:
-            # Retrive all available versions
-            for version in versions:
-                landing(collector, directory, source, version)
+    if args.all:
+        # Retrive all available versions
+        for version in versions:
+            landing(collector, client, args.host, source, version)
+    else:
+        # Retrive user selected version
+        latest = max(versions)
+        if args.latest:
+            use_latest = True
         else:
-            # Retrive user selected version
-            latest = max(versions)
-            use_latest = input(f"Use latest version? ({latest}) [Y]/N ")
-            if use_latest[:1].lower() == "n":
-                print("Select an available version of the source:")
-                version = versions[select_from(versions)]
-            else:
-                version = latest
-            landing(collector, directory, source, version)
+            user = input(f"Use latest version? ({latest}) [Y]/N ")
+            use_latest = user[:1].lower() != "n"
+        if use_latest:
+            version = latest
+        else:
+            print("Select an available version of the source:")
+            version = versions[select_from(versions)]
+        landing(collector, client, args.host, source, version)
 
 
 def select_from(
@@ -85,16 +116,38 @@ def select_from(
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        type=str,
+        required=True,
+        help="The IP of the server to connect to",
+    )
+    parser.add_argument(
+        "--start_services",
+        type=str,
+        metavar=("USERNAME", "PASSWORD"),
+        nargs=2,
+        default=(None, None),
+        help="Credentials to start up the system",
+    )
+
     subparsers = parser.add_subparsers(dest="cmd")
     retrive_cmd = subparsers.add_parser("retrive")
     retrive_cmd.add_argument(
         "--source",
-        help="Specify the dataset source to retrive from the ones present in the metadata",
+        help="Specify the dataset source to retrive from the ones present in the metadata. \
+            Use '*' to retrive from all sources",
     )
-    retrive_cmd.add_argument(
+    which_version = retrive_cmd.add_mutually_exclusive_group()
+    which_version.add_argument(
         "--all",
         action="store_true",
         help="Load all available versions of the source",
+    )
+    which_version.add_argument(
+        "--latest",
+        action="store_true",
+        help="Load latest versions of the source",
     )
     retrive_cmd.set_defaults(func=retrive)
 
@@ -103,7 +156,8 @@ def main():
         parser.print_help()
     else:
         os.chdir(Path(__file__).absolute().parent)
-        args.func(args)
+        with Service(args.host, *args.start_services):
+            args.func(args)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 import requests
-import shutil
+import urllib
 import json
 import os
 import re
 
-from pathlib import Path
+from datetime import datetime
+from hdfs import Client
 
 
 class DataCollector:
@@ -45,7 +46,7 @@ class DataCollector:
             ), "Configuration JSON file must be a dictionary"
             return config
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
         raise NotImplementedError()
 
     def versions(self) -> list[str]:
@@ -65,7 +66,7 @@ class FileCollector(DataCollector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
         folders = self.config["folders"]
         folders = folders if isinstance(folders, list) else [folders]
         matches = [
@@ -84,9 +85,9 @@ class FileCollector(DataCollector):
         ), f"Expected exactly one match for version '{version}' but matched with {', '.join(matches)}"
         (folder, match) = matches[0]
         source = os.path.join(folder, match)
-        destination = os.path.join(dest, match)
-        shutil.copyfile(source, destination)
-        return destination
+        dest = os.path.join("", match)
+        client.upload(dest, source, overwrite=True)
+        return dest
 
     def versions(self) -> list[str]:
         folders = self.config["folders"]
@@ -113,34 +114,91 @@ class FileCollector(DataCollector):
 
 
 class URLCollector(DataCollector):
+    # Income:   (?i)(?P<link>https://opendata-ajuntament\.barcelona\.cat/data/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+/download/(?P<version>\d+)_distribucio_territorial_renda_familiar\.csv)
+    # Padró:    (?si)title="(?P<version>\d+)_pad_cdo_b_barri-des\.csv".+?(?P<link>https://opendata-ajuntament\.barcelona\.cat/data/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+/download)
+    INFO_REGEX = r"(?P<link>https?:\/\/(?:www\.)?(?:[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b)*(?:\/(?P<version>[\d\w\.-]*))+(?:[\?])*(?:[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=]+)*)"
+
     def __init__(self, *args, **kwargs):
+        self.links: dict[str, str] = {}
+        self.get_URL = None
         super().__init__(*args, **kwargs)
 
-    def retrive(self, version: str, dest: Path) -> str:
+    def retrive(self, version: str, client: Client) -> str:
+        link = self.links.get(version)
+        assert link is not None
         r = requests.get(
-            self.config["URL"].format(version=version),
+            link,
             stream=True,
             **self.config["request"],
         )
-        file = "file"
-        destination = os.path.join(dest, file)
+        extension = [
+            elem.split("/", maxsplit=1)[1]
+            for elem in r.headers["Content-Type"].split(";")
+            if "/" in elem
+        ][0]
+        dest = f"file.{extension}"
         chunk_size = 65536
-        with open(destination, mode="wb", buffering=chunk_size) as handler:
+        with client.write(dest, buffersize=chunk_size) as writer:
             for chunk in r.iter_content(chunk_size=chunk_size):
-                handler.write(chunk)
+                writer.write(chunk)
         return dest
 
     def versions(self) -> list[str]:
-        raise NotImplementedError()
+        self.get_URL()
+        return list(self.links.keys())
+
+    def get_now_URL(self):
+        now = self.config["now"]
+        version = datetime.today().strftime(now["date"])
+        self.links[version] = now["URL"]
+
+    def get_scraping_URL(self):
+        scraping = self.config["scraping"]
+        r = requests.get(scraping["web"])
+        for matchobj in re.finditer(scraping["info"], r.text):
+            link = matchobj.group("link")
+            version = matchobj.group("version")
+            self.links[version] = link
 
     def _validate_config(self):
         # Correct or error on missing attributes
-        # cls = URLCollector
-        assert (
-            "URL" in self.config.keys()
-        ), "URLCollector configuration must specify 'URL'"
+        cls = URLCollector
         if "request" not in self.config.keys():
             self.config["request"] = {}
         assert isinstance(
             self.config["request"], dict
         ), "Request information ('request') must be a dictionary"
+
+        # Now: Get from the same URL and label it with the current time up to the desired precision
+        if "now" in self.config.keys():
+            now = self.config["now"]
+            self.get_URL = self.get_now_URL
+            assert (
+                "URL" in now.keys()
+            ), "URLCollector with now option must specify 'URL' in its subdictionary"
+            try:
+                urllib.parse.urlparse(now["URL"])
+            except AttributeError as err:
+                raise "Invalid URL in 'URL' parameter for 'now' option" from err
+            assert (
+                "date" in now.keys()
+            ), "URLCollector with now option must specify 'date' in its subdictionary"
+            _ = datetime.today().strftime(now["date"])
+
+        # scraping: Get from links scraped from a web page
+        elif "scraping" in self.config.keys():
+            scraping = self.config["scraping"]
+            self.get_URL = self.get_scraping_URL
+            assert (
+                "web" in scraping.keys()
+            ), "URLCollector with now option must specify 'web' in its subdictionary"
+            try:
+                urllib.parse.urlparse(scraping["web"])
+            except AttributeError as err:
+                raise "Invalid URL in 'web' parameter for 'scraping' option" from err
+            if "info" not in scraping.keys():
+                scraping["info"] = scraping.get("info", cls.INFO_REGEX)
+            assert "(?P<link>" in scraping["info"]
+            assert "(?P<version>" in scraping["info"]
+        else:
+            assert False, "No method specified to obtain the datasets URL"
