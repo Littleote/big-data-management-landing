@@ -3,12 +3,12 @@ import paramiko
 
 SERVICES = {
     "HDFS": {
-        "start": "/home/bdm/BDM_Software/hadoop/sbin/start-dfs.sh",
-        "stop": "/home/bdm/BDM_Software/hadoop/sbin/stop-dfs.sh",
+        "start": "~/BDM_Software/hadoop/sbin/start-dfs.sh",
+        "stop": "~/BDM_Software/hadoop/sbin/stop-dfs.sh",
     },
     "MongoDB": {
-        "start": "/home/bdm/BDM_Software/mongodb/bin/mongod --dbpath=/home/bdm/db --bind_ip 10.4.41.55 > /dev/null 2>&1 &",
-        "stop": "/home/bdm/BDM_Software/mongodb/bin/mongod --dbpath=/home/bdm/db --shutdown",
+        "start": "~/BDM_Software/mongodb/bin/mongod --dbpath=/home/bdm/db --bind_ip_all > /dev/null 2>&1 &",
+        "stop": "~/BDM_Software/mongodb/bin/mongod --dbpath=/home/bdm/db --shutdown",
     },
 }
 
@@ -32,9 +32,12 @@ class Service:
             print("SSH connection established successfully.")
 
             for service, commands in SERVICES.items():
+                if service in self.running:
+                    continue
+
                 print(f"Starting {service}")
                 # Execute the command to start the service
-                stdin, stdout, stderr = self.ssh.exec_command(commands["start"])
+                _, stdout, stderr = self.ssh.exec_command(commands["start"])
 
                 # Read and print output
                 print("Output:")
@@ -52,6 +55,7 @@ class Service:
         except paramiko.SSHException as ssh_ex:
             print("Unable to establish SSH connection:", ssh_ex)
         finally:
+            print("Done")
             return self.ssh
 
     def __exit__(self, type, value, traceback):
@@ -63,8 +67,22 @@ class Service:
 
             print(f"Stopping {service}")
             # Execute the command to stop the service
-            _ = self.ssh.exec_command(commands["stop"])
+            _, stdout, stderr = self.ssh.exec_command(commands["stop"])
 
-        self.running.clear()
+            # Read and print output
+            print("Output:")
+            for line in stdout:
+                print(line.strip())
+
+            # Check for any errors
+            if stderr.channel.recv_exit_status() == 0:
+                self.running.remove(service)
+            else:
+                print("Error:", stderr.read().decode())
+
+        if len(self.running) != 0:
+            print("Failed to shutdown the following services:")
+            for service in self.running:
+                print(service)
 
         self.ssh.close()

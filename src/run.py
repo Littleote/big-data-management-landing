@@ -123,10 +123,11 @@ def main():
         help="The IP of the server to connect to",
     )
     parser.add_argument(
-        "--start_service",
+        "--start_services",
         type=str,
-        metavar=["USERNAME", "PASSWORD"],
+        metavar=("USERNAME", "PASSWORD"),
         nargs=2,
+        default=(None, None),
         help="Credentials to start up the system",
     )
 
@@ -155,7 +156,7 @@ def main():
         parser.print_help()
     else:
         os.chdir(Path(__file__).absolute().parent)
-        with Service(args.host, *args.start_service):
+        with Service(args.host, *args.start_services):
             args.func(args)
 
 
